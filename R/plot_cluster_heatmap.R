@@ -80,8 +80,9 @@
 #' @param values_format function or `NULL`. A function that takes a numeric
 #'   vector and returns a character vector of formatted labels. Applied to
 #'   the per-cluster median values when `show_values = TRUE`. When `NULL`,
-#'   values are formatted to three significant figures using
-#'   `formatC(x, digits = 3, format = "g")`. Default is `NULL`.
+#'   values are formatted to three significant figures without scientific
+#'   notation using `trimws(format(x, digits = 3, scientific = FALSE))`.
+#'   Default is `NULL`.
 #' @param values_col character. Colour for the overlaid text labels.
 #'   Default is `"black"`.
 #' @param values_size numeric. Font size (in `ggplot2` units) for the
@@ -401,7 +402,7 @@ plot_group_heatmap <- function(.data,
   }
   if (show_values) {
     if (is.null(values_format)) {
-      values_format <- function(x) formatC(x, digits = 3, format = "g")
+      values_format <- function(x) trimws(format(x, digits = 3, scientific = FALSE))
     }
     plot_tbl <- plot_tbl %>%
       dplyr::mutate(label = values_format(.data$med))

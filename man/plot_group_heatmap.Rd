@@ -112,8 +112,9 @@ cluster-variable combination as a text label on each tile. Default is
 \item{values_format}{function or \code{NULL}. A function that takes a numeric
 vector and returns a character vector of formatted labels. Applied to
 the per-cluster median values when \code{show_values = TRUE}. When \code{NULL},
-values are formatted to three significant figures using
-\code{formatC(x, digits = 3, format = "g")}. Default is \code{NULL}.}
+values are formatted to three significant figures without scientific
+notation using \code{trimws(format(x, digits = 3, scientific = FALSE))}.
+Default is \code{NULL}.}
 
 \item{values_col}{character. Colour for the overlaid text labels.
 Default is \code{"black"}.}
