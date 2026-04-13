@@ -141,10 +141,13 @@
 #'   peak of each group using `ggrepel::geom_text_repel`. When `density` is
 #'   `"overall"`, labels are placed at the overall-density value at each
 #'   group's median. Default is `FALSE`.
-#' @param legend logical or `NULL`. Whether to display the legend. `NULL`
+#' @param show_legend logical or `NULL`. Whether to display the legend. `NULL`
 #'   (default): the legend is shown when the number of groups is 15 or fewer
 #'   and hidden otherwise. `TRUE`/`FALSE`: always show/hide the legend,
-#'   overriding the default behaviour.
+#'   overriding the default behaviour. When both `show_legend` and the
+#'   deprecated `legend` are supplied, `show_legend` takes precedence.
+#' @param legend logical or `NULL`. Deprecated alias for `show_legend`.
+#'   Retained for backwards compatibility.
 #' @param font_size numeric. Font size passed to `cowplot::theme_cowplot`.
 #'   Default is `14`.
 #' @param thm ggplot2 theme object or `NULL`. Default is
@@ -205,6 +208,7 @@ plot_group_density <- function(.data,
                                  na_rm = TRUE,
                                  alpha = 0.75,
                                  label = FALSE,
+                                 show_legend = NULL,
                                  legend = NULL,
                                  font_size = 14,
                                  thm = cowplot::theme_cowplot(
@@ -248,9 +252,20 @@ plot_group_density <- function(.data,
   if (!is.logical(label) || length(label) != 1L || is.na(label)) {
     stop("`label` must be TRUE or FALSE.", call. = FALSE)
   }
-  if (!is.null(legend) &&
-      (!is.logical(legend) || length(legend) != 1L || is.na(legend))) {
-    stop("`legend` must be TRUE, FALSE, or NULL.", call. = FALSE)
+  # Resolve show_legend vs deprecated legend alias
+  if (!is.null(show_legend) && !is.null(legend)) {
+    warning(
+      "Both `show_legend` and `legend` were supplied; `show_legend` takes ",
+      "precedence. The `legend` argument is deprecated.",
+      call. = FALSE
+    )
+  }
+  if (is.null(show_legend) && !is.null(legend)) {
+    show_legend <- legend
+  }
+  if (!is.null(show_legend) &&
+      (!is.logical(show_legend) || length(show_legend) != 1L || is.na(show_legend))) {
+    stop("`show_legend` must be TRUE, FALSE, or NULL.", call. = FALSE)
   }
 
   .plot_cluster_validate(.data, cluster, vars)
@@ -315,7 +330,7 @@ plot_group_density <- function(.data,
 
   cluster_vec <- unique(data[[cluster]])
   n_groups <- length(cluster_vec)
-  show_legend <- if (is.null(legend)) n_groups <= 15L else isTRUE(legend)
+  show_legend <- if (is.null(show_legend)) n_groups <= 15L else isTRUE(show_legend)
 
   # Helper: resolve per-cluster bandwidth from the `bandwidth` argument.
   .resolve_bw <- function(vals) {

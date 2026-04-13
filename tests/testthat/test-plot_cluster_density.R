@@ -1359,7 +1359,7 @@ test_that("plot_cluster_density errors on invalid legend argument", {
     var1 = rnorm(60)
   )
   expect_error(
-    plot_cluster_density(data, cluster = "cluster", legend = "yes"),
-    "`legend` must be TRUE, FALSE, or NULL"
+    plot_cluster_density(data, cluster = "cluster", show_legend = "yes"),
+    "`show_legend` must be TRUE, FALSE, or NULL"
   )
 })
