@@ -13,6 +13,7 @@ plot_group_scatter(
   dim_red_args = list(),
   point_col_var = NULL,
   point_col = NULL,
+  palette_group = "auto",
   palette = "bipolar",
   col = c("#2166AC", "#F7F7F7", "#B2182B"),
   col_positions = "auto",
@@ -34,7 +35,13 @@ plot_group_scatter(
   grid = cowplot::background_grid(major = "xy")
 )
 
-plot_cluster_scatter(.data, cluster, ...)
+plot_cluster_scatter(
+  .data,
+  cluster,
+  palette_cluster = "auto",
+  palette = "bipolar",
+  ...
+)
 }
 \arguments{
 \item{.data}{data.frame. Rows are observations. Must contain a column identifying group membership and numeric variables.}
@@ -56,15 +63,22 @@ overridden. Ignored when \code{dim_red = "none"}. Default is \code{list()}.}
 
 \item{point_col_var}{character or \code{NULL}. Column to use for point colour mapping. Default is same as \code{cluster}.}
 
-\item{point_col}{named vector or \code{NULL}. Custom colours for discrete \code{point_col_var} (named by
-level). Ignored for continuous \code{point_col_var} (use \code{col} instead).}
+\item{point_col}{named vector or \code{NULL}. Custom colours for discrete
+\code{point_col_var} (named by level). When \code{NULL} (default), colours are
+chosen automatically by number of groups: Okabe-Ito for up to 8,
+ColorBrewer Paired for up to 12, Kelly's palette (requires \code{Polychrome})
+for up to 21, Glasbey's palette (requires \code{Polychrome}) for up to 31,
+and \code{hue_pal()} for larger numbers. Ignored for continuous
+\code{point_col_var} (use \code{col} instead).}
 
-\item{palette}{character or \code{NULL}. Named colour palette for the continuous \code{point_col_var} colour
-scale. When not \code{NULL}, overrides \code{col} and \code{col_positions}. Available palettes:
-\code{"bipolar"} (default, blue-white-red), \code{"alarm"} (green-white-red, good-to-bad),
-\code{"accessible"} (blue-white-orange, colour-blind-safe diverging), \code{"heat"} (light-yellow to
-dark-red, sequential), \code{"sky"} (white to navy, sequential). Set to \code{NULL} to use \code{col} and
-\code{col_positions} directly. Ignored when \code{point_col_var} is discrete.}
+\item{palette_group}{character. Palette used for automatic colour assignment
+when \code{point_col} is \code{NULL} for a discrete \code{point_col_var}. One of
+\code{"auto"} (default), \code{"okabe_ito"}, \code{"paired"}, \code{"kelly"}, \code{"glasbey"},
+or \code{"hue_pal"}. See the \strong{Colour palette} section of Details.}
+
+\item{palette}{character or \code{NULL}. Named colour palette for the continuous
+point colour scale. Forwarded to \code{\link[=plot_group_scatter]{plot_group_scatter()}}. Default is
+\code{"bipolar"}.}
 
 \item{col}{character vector. Colours used for the continuous \code{point_col_var} colour scale, ordered
 from low to high values. Default is \code{c("#2166AC", "#F7F7F7", "#B2182B")} (blue, white, red).
@@ -120,6 +134,9 @@ suppress the grid.}
 \item{cluster}{character. Name of the column in \code{.data} that identifies
 group membership. Alias for the \code{group} parameter.}
 
+\item{palette_cluster}{character. Alias for \code{palette_group} in
+\code{\link[=plot_group_scatter]{plot_group_scatter()}}. See the \strong{Colour palette} section of Details.}
+
 \item{...}{Additional arguments passed to \code{\link[=plot_group_scatter]{plot_group_scatter()}}.}
 }
 \description{
@@ -127,6 +144,27 @@ Creates a biaxial scatter plot with observations colored by group assignment.
 Median group centroids are overlaid as large points and labeled with group names.
 The plot can use either raw variables (specified by the user) or dimensionality
 reduction components as axes.
+\subsection{Colour palette}{
+
+When \code{point_col} is \code{NULL}, group colours are assigned automatically
+based on \code{palette_group}. The \code{"auto"} strategy selects a palette by the
+number of groups:
+\itemize{
+\item \strong{1–8 groups}: Okabe-Ito — colorblind-safe 8-colour palette.
+\item \strong{9–12 groups}: ColorBrewer Paired — 12 colours pairing light and dark
+versions of 6 hues.
+\item \strong{13–21 groups}: Kelly's palette (optional \code{Polychrome} package) — 21
+colours of maximum perceptual contrast (white excluded). Falls back to
+\code{hue_pal()} with a warning if \code{Polychrome} is not installed.
+\item \strong{22–31 groups}: Glasbey's palette (optional \code{Polychrome} package) — 31
+algorithmically spaced colours (white excluded). Falls back to \code{hue_pal()}
+with a warning if \code{Polychrome} is not installed.
+\item \strong{> 31 groups}: \code{hue_pal()} — evenly spaced hues (a warning is issued).
+}
+
+Set \code{palette_group} explicitly to override the automatic selection (provided
+the chosen palette supports at least as many colours as there are groups).
+}
 }
 \examples{
 set.seed(1)

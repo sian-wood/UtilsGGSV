@@ -10,6 +10,7 @@ plot_group_density(
   group,
   vars = NULL,
   col_clusters = NULL,
+  palette_group = "auto",
   n_col = NULL,
   n_row = NULL,
   density = "both",
@@ -21,6 +22,9 @@ plot_group_density(
   density_overall_weight = NULL,
   bandwidth = "hpi_1",
   na_rm = TRUE,
+  alpha = 0.75,
+  label = FALSE,
+  legend = NULL,
   font_size = 14,
   thm = cowplot::theme_cowplot(font_size = font_size) + ggplot2::theme(plot.background =
     ggplot2::element_rect(fill = "white", colour = NA), panel.background =
@@ -28,7 +32,7 @@ plot_group_density(
   grid = cowplot::background_grid(major = "xy")
 )
 
-plot_cluster_density(.data, cluster, ...)
+plot_cluster_density(.data, cluster, palette_cluster = "auto", ...)
 }
 \arguments{
 \item{.data}{data.frame. Rows are observations. Must contain a column
@@ -42,8 +46,13 @@ use as variables. If \code{NULL}, all columns except \code{group} are used.
 Default is \code{NULL}.}
 
 \item{col_clusters}{named character vector or \code{NULL}. Per-group colours.
-Names should match group labels. When \code{NULL} (default), the default
-ggplot2 colour scale is used.}
+Names should match group labels. When \code{NULL} (default), colours are
+chosen automatically by \code{palette_group}.}
+
+\item{palette_group}{character. Palette used for automatic colour assignment
+when \code{col_clusters} is \code{NULL}. One of \code{"auto"} (default), \code{"okabe_ito"},
+\code{"paired"}, \code{"kelly"}, \code{"glasbey"}, or \code{"hue_pal"}. See the \strong{Colour
+palette} section of Details.}
 
 \item{n_col}{integer or \code{NULL}. Number of columns passed to
 \code{ggplot2::facet_wrap}. If supplied (or if \code{n_row} is supplied) a single
@@ -108,6 +117,20 @@ values are removed and a message is issued showing how many were removed
 per variable. When \code{FALSE}, \code{NA} values are passed directly to
 \code{stats::density()}, which will strip them with its own warning.}
 
+\item{alpha}{numeric. Transparency applied to density curves (both overall
+and per-group lines). Must be between 0 (fully transparent) and 1 (fully
+opaque). Default is \code{0.75}.}
+
+\item{label}{logical. Whether to add on-plot labels at the highest-density
+peak of each group using \code{ggrepel::geom_text_repel}. When \code{density} is
+\code{"overall"}, labels are placed at the overall-density value at each
+group's median. Default is \code{FALSE}.}
+
+\item{legend}{logical or \code{NULL}. Whether to display the legend. \code{NULL}
+(default): the legend is shown when the number of groups is 15 or fewer
+and hidden otherwise. \code{TRUE}/\code{FALSE}: always show/hide the legend,
+overriding the default behaviour.}
+
 \item{font_size}{numeric. Font size passed to \code{cowplot::theme_cowplot}.
 Default is \code{14}.}
 
@@ -120,6 +143,9 @@ background. Set to \code{NULL} to apply no theme adjustment.}
 
 \item{cluster}{character. Name of the column in \code{.data} that identifies
 group membership. Alias for the \code{group} parameter.}
+
+\item{palette_cluster}{character. Alias for \code{palette_group} in
+\code{\link[=plot_group_density]{plot_group_density()}}. See the \strong{Colour palette} section of Details.}
 
 \item{...}{Additional arguments passed to \code{\link[=plot_group_density]{plot_group_density()}}.}
 }
@@ -181,6 +207,28 @@ By default the function returns a \strong{named list of ggplot2 objects}, one pe
 variable. If \code{n_col} or \code{n_row} is supplied the plots are instead combined
 into a \strong{single faceted ggplot2 object} via \code{facet_wrap}.
 }
+
+\subsection{Colour palette}{
+
+When \code{col_clusters} is \code{NULL}, group colours are assigned automatically
+based on \code{palette_group}. The \code{"auto"} strategy selects a palette by the
+number of groups:
+\itemize{
+\item \strong{1–8 groups}: Okabe-Ito — colorblind-safe 8-colour palette.
+\item \strong{9–12 groups}: ColorBrewer Paired — 12 colours pairing light and dark
+versions of 6 hues.
+\item \strong{13–21 groups}: Kelly's palette (optional \code{Polychrome} package) — 21
+colours of maximum perceptual contrast (white excluded). Falls back to
+\code{hue_pal()} with a warning if \code{Polychrome} is not installed.
+\item \strong{22–31 groups}: Glasbey's palette (optional \code{Polychrome} package) — 31
+algorithmically spaced colours (white excluded). Falls back to \code{hue_pal()}
+with a warning if \code{Polychrome} is not installed.
+\item \strong{> 31 groups}: \code{hue_pal()} — evenly spaced hues (a warning is issued).
+}
+
+Set \code{palette_group} explicitly to override the automatic selection (provided
+the chosen palette supports at least as many colours as there are groups).
+}
 }
 \examples{
 set.seed(1)
@@ -205,4 +253,10 @@ plot_group_density(
 
 # Faceted plot with 2 columns
 plot_group_density(.data, group = "group", n_col = 2)
+
+# On-plot labels at density peaks
+plot_group_density(.data, group = "group", density = "cluster", label = TRUE)
+
+# Always show the legend regardless of group count
+plot_group_density(.data, group = "group", legend = TRUE)
 }

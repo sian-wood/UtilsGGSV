@@ -35,8 +35,9 @@ Merged-cluster labels to exclude from merging consideration.
 Default \code{NULL} (no labels ignored).}
 
 \item{dip_threshold}{numeric(1).
-Minimum dip-test p-value required for every variable before a
-merge is accepted.
+Minimum dip-test p-value required for every mismatched variable
+(i.e. variables where the two candidate clusters fall in different
+bins) before a merge is accepted.
 A higher value is more conservative (demands stronger evidence
 of unimodality).  Default \code{0.15}.}
 
@@ -68,8 +69,8 @@ merged cluster and columns \code{merged} (final merged label),
 \description{
 Takes the output of \code{\link[=cluster_merge_bin]{cluster_merge_bin()}} and iteratively merges
 similarly-labelled clusters as long as the combined population
-remains unimodal along every variable (assessed via Hartigan's
-Dip Test).
+remains unimodal along every variable where the two clusters have
+different bin indices (assessed via Hartigan's Dip Test).
 }
 \examples{
 set.seed(42)

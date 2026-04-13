@@ -48,6 +48,26 @@
 #' variable. If `n_col` or `n_row` is supplied the plots are instead combined
 #' into a **single faceted ggplot2 object** via `facet_wrap`.
 #'
+#' ## Colour palette
+#'
+#' When `col_clusters` is `NULL`, group colours are assigned automatically
+#' based on `palette_group`. The `"auto"` strategy selects a palette by the
+#' number of groups:
+#'
+#' - **1–8 groups**: Okabe-Ito — colorblind-safe 8-colour palette.
+#' - **9–12 groups**: ColorBrewer Paired — 12 colours pairing light and dark
+#'   versions of 6 hues.
+#' - **13–21 groups**: Kelly's palette (optional `Polychrome` package) — 21
+#'   colours of maximum perceptual contrast (white excluded). Falls back to
+#'   `hue_pal()` with a warning if `Polychrome` is not installed.
+#' - **22–31 groups**: Glasbey's palette (optional `Polychrome` package) — 31
+#'   algorithmically spaced colours (white excluded). Falls back to `hue_pal()`
+#'   with a warning if `Polychrome` is not installed.
+#' - **> 31 groups**: `hue_pal()` — evenly spaced hues (a warning is issued).
+#'
+#' Set `palette_group` explicitly to override the automatic selection (provided
+#' the chosen palette supports at least as many colours as there are groups).
+#'
 #' @param .data data.frame. Rows are observations. Must contain a column
 #'   identifying group membership and columns for variable values.
 #' @param group character. Name of the column in `.data` that identifies
@@ -56,8 +76,12 @@
 #'   use as variables. If `NULL`, all columns except `group` are used.
 #'   Default is `NULL`.
 #' @param col_clusters named character vector or `NULL`. Per-group colours.
-#'   Names should match group labels. When `NULL` (default), a distinct colour
-#'   is generated automatically for each group using a hue-based palette.
+#'   Names should match group labels. When `NULL` (default), colours are
+#'   chosen automatically by `palette_group`.
+#' @param palette_group character. Palette used for automatic colour assignment
+#'   when `col_clusters` is `NULL`. One of `"auto"` (default), `"okabe_ito"`,
+#'   `"paired"`, `"kelly"`, `"glasbey"`, or `"hue_pal"`. See the **Colour
+#'   palette** section of Details.
 #' @param n_col integer or `NULL`. Number of columns passed to
 #'   `ggplot2::facet_wrap`. If supplied (or if `n_row` is supplied) a single
 #'   faceted plot is returned instead of a list. Default is `NULL`.
@@ -110,6 +134,17 @@
 #'   values are removed and a message is issued showing how many were removed
 #'   per variable. When `FALSE`, `NA` values are passed directly to
 #'   `stats::density()`, which will strip them with its own warning.
+#' @param alpha numeric. Transparency applied to density curves (both overall
+#'   and per-group lines). Must be between 0 (fully transparent) and 1 (fully
+#'   opaque). Default is `0.75`.
+#' @param label logical. Whether to add on-plot labels at the highest-density
+#'   peak of each group using `ggrepel::geom_text_repel`. When `density` is
+#'   `"overall"`, labels are placed at the overall-density value at each
+#'   group's median. Default is `FALSE`.
+#' @param legend logical or `NULL`. Whether to display the legend. `NULL`
+#'   (default): the legend is shown when the number of groups is 15 or fewer
+#'   and hidden otherwise. `TRUE`/`FALSE`: always show/hide the legend,
+#'   overriding the default behaviour.
 #' @param font_size numeric. Font size passed to `cowplot::theme_cowplot`.
 #'   Default is `14`.
 #' @param thm ggplot2 theme object or `NULL`. Default is
@@ -146,10 +181,17 @@
 #'
 #' # Faceted plot with 2 columns
 #' plot_group_density(.data, group = "group", n_col = 2)
+#'
+#' # On-plot labels at density peaks
+#' plot_group_density(.data, group = "group", density = "cluster", label = TRUE)
+#'
+#' # Always show the legend regardless of group count
+#' plot_group_density(.data, group = "group", legend = TRUE)
 plot_group_density <- function(.data,
                                  group,
                                  vars = NULL,
                                  col_clusters = NULL,
+                                 palette_group = "auto",
                                  n_col = NULL,
                                  n_row = NULL,
                                  density = "both",
@@ -161,6 +203,9 @@ plot_group_density <- function(.data,
                                  density_overall_weight = NULL,
                                  bandwidth = "hpi_1",
                                  na_rm = TRUE,
+                                 alpha = 0.75,
+                                 label = FALSE,
+                                 legend = NULL,
                                  font_size = 14,
                                  thm = cowplot::theme_cowplot(
                                    font_size = font_size
@@ -195,6 +240,17 @@ plot_group_density <- function(.data,
   }
   if (!is.logical(na_rm) || length(na_rm) != 1L || is.na(na_rm)) {
     stop("`na_rm` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.numeric(alpha) || length(alpha) != 1L || is.na(alpha) ||
+        alpha < 0 || alpha > 1) {
+    stop("`alpha` must be a single number between 0 and 1.", call. = FALSE)
+  }
+  if (!is.logical(label) || length(label) != 1L || is.na(label)) {
+    stop("`label` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.null(legend) &&
+      (!is.logical(legend) || length(legend) != 1L || is.na(legend))) {
+    stop("`legend` must be TRUE, FALSE, or NULL.", call. = FALSE)
   }
 
   .plot_cluster_validate(.data, cluster, vars)
@@ -258,11 +314,8 @@ plot_group_density <- function(.data,
   }
 
   cluster_vec <- unique(data[[cluster]])
-  .cluster_colours <- function() {
-    if (!is.null(col_clusters)) return(col_clusters)
-    cols <- scales::hue_pal()(length(cluster_vec))
-    stats::setNames(cols, cluster_vec)
-  }
+  n_groups <- length(cluster_vec)
+  show_legend <- if (is.null(legend)) n_groups <= 15L else isTRUE(legend)
 
   # Helper: resolve per-cluster bandwidth from the `bandwidth` argument.
   .resolve_bw <- function(vals) {
@@ -421,7 +474,8 @@ plot_group_density <- function(.data,
             p <- ggplot2::ggplot() +
               ggplot2::geom_line(
                 data = overall_d,
-                ggplot2::aes(x = .data$x, y = .data$y)
+                ggplot2::aes(x = .data$x, y = .data$y),
+                alpha = alpha
               ) +
               ggplot2::geom_vline(
                 data = med_tbl,
@@ -435,7 +489,7 @@ plot_group_density <- function(.data,
             p <- ggplot2::ggplot(
               dens_tbl, ggplot2::aes(x = .data$value)
             ) +
-              ggplot2::geom_density() +
+              ggplot2::geom_density(alpha = alpha) +
               ggplot2::geom_vline(
                 data = med_tbl,
                 ggplot2::aes(
@@ -464,19 +518,21 @@ plot_group_density <- function(.data,
                 x = .data$x, y = .data$y, colour = .data$cluster
               )
             ) +
-              ggplot2::geom_line() +
+              ggplot2::geom_line(alpha = alpha) +
               ggplot2::labs(x = v, y = "Density", colour = "Group")
           } else {
             p <- ggplot2::ggplot() +
               ggplot2::geom_line(
                 data = overall_d,
-                ggplot2::aes(x = .data$x, y = .data$y)
+                ggplot2::aes(x = .data$x, y = .data$y),
+                alpha = alpha
               ) +
               ggplot2::geom_line(
                 data = cl_dens,
                 ggplot2::aes(
                   x = .data$x, y = .data$y, colour = .data$cluster
-                )
+                ),
+                alpha = alpha
               ) +
               ggplot2::labs(x = v, y = "Density", colour = "Group")
           }
@@ -484,14 +540,55 @@ plot_group_density <- function(.data,
 
         p <- .add_rug(p, all_vals, dens_vals, v)
 
+        if (isTRUE(label)) {
+          if (density == "overall") {
+            od_lbl <- if (!is.null(density_overall_weight)) {
+              overall_d
+            } else {
+              .dens_tbl(dens_vals)
+            }
+            label_tbl <- purrr::map_df(cluster_vec, function(cl) {
+              x_lbl <- med_tbl$median[med_tbl$cluster == cl]
+              y_lbl <- if (!is.null(od_lbl) && length(x_lbl) == 1L) {
+                y <- stats::approx(od_lbl$x, od_lbl$y, xout = x_lbl)$y
+                if (is.na(y)) 0 else y
+              } else {
+                0
+              }
+              tibble::tibble(cluster = cl, x = x_lbl, y = y_lbl)
+            })
+          } else {
+            label_tbl <- purrr::map_df(cluster_vec, function(cl) {
+              cl_d <- cl_dens[cl_dens$cluster == cl, , drop = FALSE]
+              if (nrow(cl_d) == 0L) return(tibble::tibble())
+              peak_idx <- which.max(cl_d$y)
+              tibble::tibble(
+                cluster = cl, x = cl_d$x[peak_idx], y = cl_d$y[peak_idx]
+              )
+            })
+          }
+          p <- p + ggrepel::geom_text_repel(
+            data = label_tbl,
+            ggplot2::aes(
+              x = .data$x, y = .data$y, label = .data$cluster,
+              colour = .data$cluster
+            ),
+            inherit.aes = FALSE,
+            show.legend = FALSE
+          )
+        }
+
         if (!is.null(expand_coord)) {
           ec <- if (is.list(expand_coord)) expand_coord[[v]] else expand_coord
           if (!is.null(ec)) p <- p + ggplot2::expand_limits(x = ec)
         }
 
-        p <- p + ggplot2::scale_colour_manual(values = .cluster_colours())
+        p <- p + ggplot2::scale_colour_manual(
+          values = .discrete_cluster_colours(cluster_vec, col_clusters, palette_group)
+        )
         if (!is.null(thm)) p <- p + thm
         if (!is.null(grid)) p <- p + grid
+        if (!show_legend) p <- p + ggplot2::theme(legend.position = "none")
 
         p
       }),
@@ -530,7 +627,8 @@ plot_group_density <- function(.data,
       p <- ggplot2::ggplot() +
         ggplot2::geom_line(
           data = overall_dens_tbl,
-          ggplot2::aes(x = .data$x, y = .data$y)
+          ggplot2::aes(x = .data$x, y = .data$y),
+          alpha = alpha
         ) +
         ggplot2::geom_vline(
           data = median_tbl,
@@ -545,7 +643,7 @@ plot_group_density <- function(.data,
         ggplot2::labs(x = "Value", y = "Density", colour = "Group")
     } else {
       p <- ggplot2::ggplot(long_tbl, ggplot2::aes(x = .data$value)) +
-        ggplot2::geom_density() +
+        ggplot2::geom_density(alpha = alpha) +
         ggplot2::geom_vline(
           data = median_tbl,
           ggplot2::aes(xintercept = .data$median, colour = .data$cluster)
@@ -598,7 +696,7 @@ plot_group_density <- function(.data,
           x = .data$x, y = .data$y, colour = .data$cluster
         )
       ) +
-        ggplot2::geom_line() +
+        ggplot2::geom_line(alpha = alpha) +
         ggplot2::facet_wrap(
           ~ .data$variable,
           scales = scales,
@@ -610,13 +708,15 @@ plot_group_density <- function(.data,
       p <- ggplot2::ggplot() +
         ggplot2::geom_line(
           data = overall_dens_tbl,
-          ggplot2::aes(x = .data$x, y = .data$y)
+          ggplot2::aes(x = .data$x, y = .data$y),
+          alpha = alpha
         ) +
         ggplot2::geom_line(
           data = cluster_dens_tbl,
           ggplot2::aes(
             x = .data$x, y = .data$y, colour = .data$cluster
-          )
+          ),
+          alpha = alpha
         ) +
         ggplot2::facet_wrap(
           ~ .data$variable,
@@ -630,13 +730,63 @@ plot_group_density <- function(.data,
 
   p <- .add_rug_facet(p)
 
+  if (isTRUE(label)) {
+    if (density == "overall") {
+      label_tbl <- purrr::map_df(vars, function(v) {
+        all_vals_lbl  <- .strip_na(data[[v]], v)
+        dens_vals_lbl <- .filter_vals(all_vals_lbl, v)
+        od_lbl <- if (!is.null(density_overall_weight)) {
+          overall_dens_tbl[overall_dens_tbl$variable == v, , drop = FALSE]
+        } else {
+          .dens_tbl(dens_vals_lbl)
+        }
+        purrr::map_df(cluster_vec, function(cl) {
+          x_lbl <- median_tbl$median[
+            median_tbl$variable == v & median_tbl$cluster == cl
+          ]
+          y_lbl <- if (!is.null(od_lbl) && nrow(od_lbl) > 0L &&
+                       length(x_lbl) == 1L) {
+            y <- stats::approx(od_lbl$x, od_lbl$y, xout = x_lbl)$y
+            if (is.na(y)) 0 else y
+          } else {
+            0
+          }
+          tibble::tibble(variable = v, cluster = cl, x = x_lbl, y = y_lbl)
+        })
+      })
+    } else {
+      label_tbl <- dplyr::group_by(
+        cluster_dens_tbl, .data$variable, .data$cluster
+      )
+      label_tbl <- dplyr::slice_max(
+        label_tbl, order_by = .data$y, n = 1L, with_ties = FALSE
+      )
+      label_tbl <- dplyr::ungroup(label_tbl)
+      label_tbl <- dplyr::select(
+        label_tbl, .data$variable, .data$cluster, .data$x, .data$y
+      )
+    }
+    p <- p + ggrepel::geom_text_repel(
+      data = label_tbl,
+      ggplot2::aes(
+        x = .data$x, y = .data$y, label = .data$cluster,
+        colour = .data$cluster
+      ),
+      inherit.aes = FALSE,
+      show.legend = FALSE
+    )
+  }
+
   if (!is.null(expand_coord) && is.numeric(expand_coord)) {
     p <- p + ggplot2::expand_limits(x = expand_coord)
   }
 
-  p <- p + ggplot2::scale_colour_manual(values = .cluster_colours())
+  p <- p + ggplot2::scale_colour_manual(
+    values = .discrete_cluster_colours(cluster_vec, col_clusters, palette_group)
+  )
   if (!is.null(thm)) p <- p + thm
   if (!is.null(grid)) p <- p + grid
+  if (!show_legend) p <- p + ggplot2::theme(legend.position = "none")
 
   p
 }
@@ -644,8 +794,10 @@ plot_group_density <- function(.data,
 #' @rdname plot_group_density
 #' @param cluster character. Name of the column in `.data` that identifies
 #'   group membership. Alias for the `group` parameter.
+#' @param palette_cluster character. Alias for `palette_group` in
+#'   [plot_group_density()]. See the **Colour palette** section of Details.
 #' @param ... Additional arguments passed to [plot_group_density()].
 #' @export
-plot_cluster_density <- function(.data, cluster, ...) {
-  plot_group_density(.data, group = cluster, ...)
+plot_cluster_density <- function(.data, cluster, palette_cluster = "auto", ...) {
+  plot_group_density(.data, group = cluster, palette_group = palette_cluster, ...)
 }

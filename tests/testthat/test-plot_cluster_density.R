@@ -276,7 +276,7 @@ test_that("plot_cluster_density col_clusters applies colour scale (facet mode)",
   expect_false(is.null(colour_scale))
 })
 
-test_that("plot_cluster_density default palette supports more than twelve clusters", {
+test_that("plot_cluster_density default palette supports more than 12 clusters", {
   set.seed(1)
   data <- data.frame(
     cluster = rep(paste0("C", 1:15), each = 5),
@@ -284,9 +284,22 @@ test_that("plot_cluster_density default palette supports more than twelve cluste
   )
   p <- plot_cluster_density(data, cluster = "cluster", n_col = 1)
   pb <- ggplot2::ggplot_build(p)
-  colour_scale <- pb$plot$scales$get_scales("colour")
-  expect_false(is.null(colour_scale))
-  expect_equal(length(colour_scale$palette.cache), 15)
+  colours <- unique(stats::na.omit(unlist(lapply(pb$data, `[[`, "colour"))))
+  expect_gte(length(colours), 15L)
+})
+
+test_that("plot_cluster_density palette_cluster overrides automatic selection", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:5), each = 10),
+    var1 = rnorm(50)
+  )
+  p <- plot_cluster_density(
+    data, cluster = "cluster", n_col = 1, palette_cluster = "okabe_ito"
+  )
+  pb <- ggplot2::ggplot_build(p)
+  colours <- unique(stats::na.omit(unlist(lapply(pb$data, `[[`, "colour"))))
+  expect_gte(length(colours), 5L)
 })
 
 # density and scale parameter tests
@@ -1081,5 +1094,272 @@ test_that("plot_cluster_density errors when group= is passed through ...", {
   )
   expect_error(
     plot_cluster_density(data, cluster = "cluster", group = "cluster")
+  )
+})
+
+# alpha parameter tests ---------------------------------------------------
+
+test_that("plot_cluster_density default alpha is 0.75", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  result <- plot_cluster_density(data, cluster = "cluster")
+  p <- result[["var1"]]
+  line_layers <- Filter(function(l) inherits(l$geom, "GeomLine"), p$layers)
+  for (l in line_layers) expect_equal(l$aes_params$alpha, 0.75)
+})
+
+test_that("plot_cluster_density alpha is user-adjustable", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  result <- plot_cluster_density(data, cluster = "cluster", alpha = 0.5)
+  p <- result[["var1"]]
+  line_layers <- Filter(function(l) inherits(l$geom, "GeomLine"), p$layers)
+  for (l in line_layers) expect_equal(l$aes_params$alpha, 0.5)
+})
+
+test_that("plot_cluster_density alpha applies in facet mode", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2)),
+    var2 = c(rnorm(20, -1), rnorm(20, 1), rnorm(20, 0))
+  )
+  p <- plot_cluster_density(data, cluster = "cluster", n_col = 2, alpha = 0.4)
+  line_layers <- Filter(function(l) inherits(l$geom, "GeomLine"), p$layers)
+  for (l in line_layers) expect_equal(l$aes_params$alpha, 0.4)
+})
+
+test_that("plot_cluster_density errors on invalid alpha", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  expect_error(
+    plot_cluster_density(data, cluster = "cluster", alpha = 1.5),
+    "alpha"
+  )
+  expect_error(
+    plot_cluster_density(data, cluster = "cluster", alpha = -0.1),
+    "alpha"
+  )
+})
+
+# label parameter tests ---------------------------------------------------
+
+test_that("plot_cluster_density label=TRUE adds geom_text_repel layer (cluster density, list mode)", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  result <- plot_cluster_density(
+    data, cluster = "cluster", density = "cluster", label = TRUE
+  )
+  p <- result[["var1"]]
+  label_layers <- p$layers[
+    sapply(p$layers, function(l) inherits(l$geom, "GeomTextRepel"))
+  ]
+  expect_length(label_layers, 1L)
+})
+
+test_that("plot_cluster_density label=TRUE adds geom_text_repel layer (overall density, list mode)", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  result <- plot_cluster_density(
+    data, cluster = "cluster", density = "overall", label = TRUE
+  )
+  p <- result[["var1"]]
+  label_layers <- p$layers[
+    sapply(p$layers, function(l) inherits(l$geom, "GeomTextRepel"))
+  ]
+  expect_length(label_layers, 1L)
+})
+
+test_that("plot_cluster_density label=TRUE adds geom_text_repel layer (both density, list mode)", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  result <- plot_cluster_density(
+    data, cluster = "cluster", density = "both", label = TRUE
+  )
+  p <- result[["var1"]]
+  label_layers <- p$layers[
+    sapply(p$layers, function(l) inherits(l$geom, "GeomTextRepel"))
+  ]
+  expect_length(label_layers, 1L)
+})
+
+test_that("plot_cluster_density label=FALSE adds no geom_text_repel layer (list mode)", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  result <- plot_cluster_density(
+    data, cluster = "cluster", density = "cluster", label = FALSE
+  )
+  p <- result[["var1"]]
+  label_layers <- p$layers[
+    sapply(p$layers, function(l) inherits(l$geom, "GeomTextRepel"))
+  ]
+  expect_length(label_layers, 0L)
+})
+
+test_that("plot_cluster_density label=TRUE adds geom_text_repel layer in facet mode", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2)),
+    var2 = c(rnorm(20, -1), rnorm(20, 1), rnorm(20, 0))
+  )
+  p <- plot_cluster_density(
+    data, cluster = "cluster", density = "cluster", label = TRUE, n_col = 1
+  )
+  label_layers <- p$layers[
+    sapply(p$layers, function(l) inherits(l$geom, "GeomTextRepel"))
+  ]
+  expect_length(label_layers, 1L)
+})
+
+test_that("plot_cluster_density label=TRUE in facet mode (overall) adds geom_text_repel layer", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2)),
+    var2 = c(rnorm(20, -1), rnorm(20, 1), rnorm(20, 0))
+  )
+  p <- plot_cluster_density(
+    data, cluster = "cluster", density = "overall", label = TRUE, n_col = 1
+  )
+  label_layers <- p$layers[
+    sapply(p$layers, function(l) inherits(l$geom, "GeomTextRepel"))
+  ]
+  expect_length(label_layers, 1L)
+})
+
+test_that("plot_cluster_density label=TRUE label data has one row per cluster", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  result <- plot_cluster_density(
+    data, cluster = "cluster", density = "cluster", label = TRUE
+  )
+  p <- result[["var1"]]
+  label_layers <- p$layers[
+    sapply(p$layers, function(l) inherits(l$geom, "GeomTextRepel"))
+  ]
+  expect_equal(nrow(label_layers[[1]]$data), 3L)
+})
+
+test_that("plot_cluster_density errors on invalid label argument", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = rnorm(60)
+  )
+  expect_error(
+    plot_cluster_density(data, cluster = "cluster", label = "yes"),
+    "`label` must be TRUE or FALSE"
+  )
+})
+
+# legend parameter tests --------------------------------------------------
+
+test_that("plot_cluster_density legend=NULL hides legend when >15 groups (list mode)", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:16), each = 5),
+    var1 = rnorm(80)
+  )
+  result <- plot_cluster_density(data, cluster = "cluster", legend = NULL)
+  p <- result[["var1"]]
+  theme_legend <- p$theme$legend.position
+  expect_equal(theme_legend, "none")
+})
+
+test_that("plot_cluster_density legend=NULL shows legend when <=15 groups (list mode)", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = rnorm(60)
+  )
+  result <- plot_cluster_density(data, cluster = "cluster", legend = NULL)
+  p <- result[["var1"]]
+  theme_legend <- p$theme$legend.position
+  expect_true(is.null(theme_legend) || theme_legend != "none")
+})
+
+test_that("plot_cluster_density legend=FALSE always hides legend (list mode)", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = rnorm(60)
+  )
+  result <- plot_cluster_density(data, cluster = "cluster", legend = FALSE)
+  p <- result[["var1"]]
+  expect_equal(p$theme$legend.position, "none")
+})
+
+test_that("plot_cluster_density legend=TRUE shows legend even when >15 groups (list mode)", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:16), each = 5),
+    var1 = rnorm(80)
+  )
+  result <- plot_cluster_density(data, cluster = "cluster", legend = TRUE)
+  p <- result[["var1"]]
+  theme_legend <- p$theme$legend.position
+  expect_true(is.null(theme_legend) || theme_legend != "none")
+})
+
+test_that("plot_cluster_density legend=FALSE hides legend in facet mode", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = rnorm(60),
+    var2 = rnorm(60)
+  )
+  p <- plot_cluster_density(
+    data, cluster = "cluster", legend = FALSE, n_col = 1
+  )
+  expect_equal(p$theme$legend.position, "none")
+})
+
+test_that("plot_cluster_density legend=NULL hides legend in facet mode when >15 groups", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:16), each = 5),
+    var1 = rnorm(80),
+    var2 = rnorm(80)
+  )
+  p <- plot_cluster_density(
+    data, cluster = "cluster", legend = NULL, n_col = 1
+  )
+  expect_equal(p$theme$legend.position, "none")
+})
+
+test_that("plot_cluster_density errors on invalid legend argument", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = rnorm(60)
+  )
+  expect_error(
+    plot_cluster_density(data, cluster = "cluster", legend = "yes"),
+    "`legend` must be TRUE, FALSE, or NULL"
   )
 })

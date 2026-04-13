@@ -1,7 +1,14 @@
 # UtilsGGSV (development version)
 
-- Add dynamic cluster colour generation in `plot_cluster_density()` so the
-  default palette supports any number of groups.
+- Add `node_fill_by` parameter to `plot_group_mst()` / `plot_cluster_mst()`,
+  allowing nodes to be filled by cluster identity (discrete palette) instead
+  of per-variable ECDF percentile (continuous gradient).
+- Add tiered automatic colour palette for all `plot_cluster_*` and
+  `plot_group_*` functions: Okabe-Ito for up to 8 groups (colorblind-safe),
+  ColorBrewer Paired for up to 12, Kelly's palette (from the optional
+  `Polychrome` package) for up to 21, Glasbey's palette for up to 31, and
+  `hue_pal()` fallback beyond that. The `Polychrome` package is optional;
+  a warning is issued and `hue_pal()` is used if it is not installed.
 - Fix `devtools::check()` WARNING: documented `...` argument in `plot_cluster_*`
   alias functions.
 - Fix `devtools::check()` NOTE: add `^issues$` to `.Rbuildignore`.

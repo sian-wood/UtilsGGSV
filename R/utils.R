@@ -56,6 +56,137 @@ utils::globalVariables(c(
   )
 }
 
+# Internal helper: generate a named discrete colour vector for cluster/group
+# labels. When user_colours is not NULL it is returned unchanged. Otherwise,
+# colours are chosen from the palette specified by palette_group.
+#
+# palette_group choices:
+#   "auto"      - pick automatically by n (see below)
+#   "okabe_ito" - Okabe-Ito (max 8; colorblind-safe)
+#   "paired"    - ColorBrewer Paired (max 12)
+#   "kelly"     - Kelly max-contrast palette from Polychrome (max 21, white excluded)
+#   "glasbey"   - Glasbey palette from Polychrome (max 31, white excluded)
+#   "hue_pal"   - scales::hue_pal() (any n, may be indistinguishable at large n)
+#
+# "auto" tiers: <=8 okabe_ito, <=12 paired, <=21 kelly, <=31 glasbey, else hue_pal.
+# In auto mode, missing Polychrome triggers a warning and falls back to hue_pal.
+# When a palette is requested explicitly and is unsupported it stops with an error.
+.discrete_cluster_colours <- function(groups, user_colours = NULL,
+                                       palette_group = "auto") {
+  if (!is.null(user_colours)) return(user_colours)
+  n <- length(groups)
+
+  pal <- match.arg(
+    palette_group,
+    c("auto", "okabe_ito", "paired", "kelly", "glasbey", "hue_pal")
+  )
+
+  .okabe_ito <- function() {
+    c(
+      "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+      "#0072B2", "#D55E00", "#CC79A7", "#999999"
+    )
+  }
+  .need_polychrome <- function(palette_name) {
+    if (!requireNamespace("Polychrome", quietly = TRUE)) {
+      stop(
+        sprintf(
+          "'%s' palette requires the 'Polychrome' package. ",
+          palette_name
+        ),
+        "Install it with: install.packages('Polychrome').",
+        call. = FALSE
+      )
+    }
+  }
+  .polychrome_warn_fallback <- function(palette_name) {
+    warning(
+      sprintf(
+        "Package 'Polychrome' is recommended for > 12 groups ('%s' palette) ",
+        palette_name
+      ),
+      "but is not installed. Falling back to hue_pal(). ",
+      "Install it with: install.packages('Polychrome').",
+      call. = FALSE
+    )
+  }
+
+  if (pal == "auto") {
+    pal <- if (n <= 8L) {
+      "okabe_ito"
+    } else if (n <= 12L) {
+      "paired"
+    } else if (n <= 21L) {
+      if (!requireNamespace("Polychrome", quietly = TRUE)) {
+        .polychrome_warn_fallback("kelly")
+        "hue_pal"
+      } else {
+        "kelly"
+      }
+    } else if (n <= 31L) {
+      if (!requireNamespace("Polychrome", quietly = TRUE)) {
+        .polychrome_warn_fallback("glasbey")
+        "hue_pal"
+      } else {
+        "glasbey"
+      }
+    } else {
+      warning(
+        n, " groups exceeds the recommended maximum of 31 for distinct ",
+        "colours. Falling back to hue_pal(), which may produce ",
+        "indistinguishable colours at this scale.",
+        call. = FALSE
+      )
+      "hue_pal"
+    }
+  }
+
+  cols <- switch(pal,
+    okabe_ito = {
+      ok <- .okabe_ito()
+      if (n > length(ok)) {
+        stop(
+          sprintf("'okabe_ito' supports at most %d groups; got %d.", length(ok), n),
+          call. = FALSE
+        )
+      }
+      ok[seq_len(n)]
+    },
+    paired = {
+      if (n > 12L) {
+        stop(
+          sprintf("'paired' supports at most 12 groups; got %d.", n),
+          call. = FALSE
+        )
+      }
+      scales::brewer_pal(palette = "Paired")(n)
+    },
+    kelly = {
+      .need_polychrome("kelly")
+      if (n > 21L) {
+        stop(
+          sprintf("'kelly' supports at most 21 groups; got %d.", n),
+          call. = FALSE
+        )
+      }
+      unname(Polychrome::kelly.colors(22L))[-1L][seq_len(n)]
+    },
+    glasbey = {
+      .need_polychrome("glasbey")
+      if (n > 31L) {
+        stop(
+          sprintf("'glasbey' supports at most 31 groups; got %d.", n),
+          call. = FALSE
+        )
+      }
+      unname(Polychrome::glasbey.colors(32L))[-1L][seq_len(n)]
+    },
+    hue_pal = scales::hue_pal()(n)
+  )
+
+  stats::setNames(cols, groups)
+}
+
 # Internal helper: resolve palette → col + col_positions, with validation.
 # Returns a list(col, col_positions).  If palette is NULL, returns the
 # supplied col/col_positions unchanged.

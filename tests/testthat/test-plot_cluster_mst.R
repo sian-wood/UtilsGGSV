@@ -479,3 +479,53 @@ test_that("plot_cluster_mst errors when group= is passed through ...", {
     plot_cluster_mst(data, cluster = "cluster", group = "cluster")
   )
 })
+
+test_that("plot_cluster_mst node_fill_by = 'cluster' returns a single ggplot", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2)),
+    var2 = c(rnorm(20, -1), rnorm(20, 1), rnorm(20, 0))
+  )
+  result <- plot_cluster_mst(data, cluster = "cluster", node_fill_by = "cluster")
+  expect_s3_class(result, "ggplot")
+})
+
+test_that("plot_cluster_mst node_fill_by = 'cluster' uses discrete fill scale", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2)),
+    var2 = c(rnorm(20, -1), rnorm(20, 1), rnorm(20, 0))
+  )
+  result <- plot_cluster_mst(data, cluster = "cluster", node_fill_by = "cluster")
+  fill_scale <- result$scales$get_scales("fill")
+  expect_false(is.null(fill_scale))
+  expect_s3_class(fill_scale, "ScaleDiscrete")
+})
+
+test_that("plot_cluster_mst node_fill_by = 'cluster' respects col_clusters", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2))
+  )
+  cols <- c(C1 = "#FF0000", C2 = "#00FF00", C3 = "#0000FF")
+  result <- plot_cluster_mst(
+    data, cluster = "cluster", node_fill_by = "cluster", col_clusters = cols
+  )
+  fill_scale <- result$scales$get_scales("fill")
+  expect_equal(unname(fill_scale$palette(3L)), unname(cols))
+})
+
+test_that("plot_cluster_mst node_fill_by = 'variable' still returns list", {
+  set.seed(1)
+  data <- data.frame(
+    cluster = rep(paste0("C", 1:3), each = 20),
+    var1 = c(rnorm(20, 2), rnorm(20, 0), rnorm(20, -2)),
+    var2 = c(rnorm(20, -1), rnorm(20, 1), rnorm(20, 0))
+  )
+  result <- plot_cluster_mst(data, cluster = "cluster", node_fill_by = "variable")
+  expect_type(result, "list")
+  expect_length(result, 2L)
+})

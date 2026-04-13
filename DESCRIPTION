@@ -20,6 +20,7 @@ Suggests:
     kohonen,
     mvtnorm,
     palmerpenguins,
+    Polychrome,
     remotes,
     rmarkdown,
     testthat (>= 3.0.0),
