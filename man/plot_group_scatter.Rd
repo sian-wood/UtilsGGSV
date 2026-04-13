@@ -38,6 +38,7 @@ plot_group_scatter(
 plot_cluster_scatter(
   .data,
   cluster,
+  col_clusters = NULL,
   palette_cluster = "auto",
   palette = "bipolar",
   ...
@@ -133,6 +134,11 @@ suppress the grid.}
 
 \item{cluster}{character. Name of the column in \code{.data} that identifies
 group membership. Alias for the \code{group} parameter.}
+
+\item{col_clusters}{named character vector or \code{NULL}. Per-group colours.
+Names should match group labels. When \code{NULL} (default), colours are
+chosen automatically by \code{palette_cluster}. Forwarded to the \code{point_col}
+argument of \code{\link[=plot_group_scatter]{plot_group_scatter()}}.}
 
 \item{palette_cluster}{character. Alias for \code{palette_group} in
 \code{\link[=plot_group_scatter]{plot_group_scatter()}}. See the \strong{Colour palette} section of Details.}

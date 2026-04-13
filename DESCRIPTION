@@ -1,7 +1,7 @@
 Package: UtilsGGSV
 Type: Package
 Title: Utility Functions for ggplot2
-Version: 0.11.0
+Version: 0.11.1
 Author: Miguel Rodo
 Maintainer: Miguel Rodo <rdxmig002@myuct.ac.za>
 Description: Provides utility functions for working with `ggplot2` objects.

@@ -447,6 +447,10 @@ plot_group_scatter <- function(.data,
 #' @rdname plot_group_scatter
 #' @param cluster character. Name of the column in `.data` that identifies
 #'   group membership. Alias for the `group` parameter.
+#' @param col_clusters named character vector or `NULL`. Per-group colours.
+#'   Names should match group labels. When `NULL` (default), colours are
+#'   chosen automatically by `palette_cluster`. Forwarded to the `point_col`
+#'   argument of [plot_group_scatter()].
 #' @param palette_cluster character. Alias for `palette_group` in
 #'   [plot_group_scatter()]. See the **Colour palette** section of Details.
 #' @param palette character or `NULL`. Named colour palette for the continuous
@@ -454,8 +458,14 @@ plot_group_scatter <- function(.data,
 #'   `"bipolar"`.
 #' @param ... Additional arguments passed to [plot_group_scatter()].
 #' @export
-plot_cluster_scatter <- function(.data, cluster, palette_cluster = "auto",
+plot_cluster_scatter <- function(.data, cluster, col_clusters = NULL,
+                                  palette_cluster = "auto",
                                   palette = "bipolar", ...) {
-  plot_group_scatter(.data, group = cluster, palette_group = palette_cluster,
-                      palette = palette, ...)
+  extra <- list(...)
+  if (!is.null(col_clusters)) extra[["point_col"]] <- col_clusters
+  do.call(
+    plot_group_scatter,
+    c(list(.data, group = cluster, palette_group = palette_cluster,
+           palette = palette), extra)
+  )
 }
