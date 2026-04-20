@@ -98,8 +98,11 @@ test_that("plot_cluster_density respects vars argument (facet mode)", {
     data, cluster = "cluster", vars = c("var1", "var2"),
     density = "overall", n_col = 1
   )
-  expect_equal(length(unique(p$data$variable)), 2L)
-  expect_true(all(unique(p$data$variable) %in% c("var1", "var2")))
+  density_layer <- p$layers[
+    sapply(p$layers, function(l) inherits(l$geom, "GeomDensity"))
+  ][[1]]
+  expect_equal(length(unique(density_layer$data$variable)), 2L)
+  expect_true(all(unique(density_layer$data$variable) %in% c("var1", "var2")))
 })
 
 test_that("plot_cluster_density uses all non-cluster columns when vars is NULL", {
@@ -845,10 +848,10 @@ test_that("plot_cluster_density default density is 'both'", {
   expect_false(
     any(sapply(p$layers, function(l) inherits(l$geom, "GeomVline")))
   )
-  # The cluster density layer data should contain all 3 clusters
+  # The cluster density layer (now drawn first) data should contain all 3 clusters
   cluster_line <- p$layers[
     sapply(p$layers, function(l) inherits(l$geom, "GeomLine"))
-  ][[2]]
+  ][[1]]
   expect_equal(length(unique(cluster_line$data$cluster)), 3L)
 })
 

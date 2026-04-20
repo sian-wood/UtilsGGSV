@@ -23,6 +23,10 @@ plot_group_density(
   bandwidth = "hpi_1",
   na_rm = TRUE,
   alpha = 0.75,
+  pop_ref = NULL,
+  pop_ref_label = NULL,
+  linewidth_overall = 1,
+  linewidth_cluster = 0.5,
   label = FALSE,
   show_legend = NULL,
   legend = NULL,
@@ -121,6 +125,26 @@ per variable. When \code{FALSE}, \code{NA} values are passed directly to
 \item{alpha}{numeric. Transparency applied to density curves (both overall
 and per-group lines). Must be between 0 (fully transparent) and 1 (fully
 opaque). Default is \code{0.75}.}
+
+\item{pop_ref}{numeric vector, named list of numeric vectors, or \code{NULL}.
+An additional reference population rendered as a filled light-grey density
+area behind all other layers. A plain numeric vector is used for every
+variable. A named list (names = variable names, values = numeric vectors)
+applies a per-variable reference. \code{NULL} (default) adds no reference
+layer. The density bandwidth, NA handling, and (when \code{scale = "max_overall"}) y-axis scaling all follow the same settings as the main
+data.}
+
+\item{pop_ref_label}{character or \code{NULL}. Label for the \code{pop_ref} fill
+legend entry. When \code{NULL} (default) and \code{pop_ref} is supplied, the label
+is derived automatically from the name of the object passed to \code{pop_ref};
+if no simple name can be determined, \code{"Reference"} is used. Set to \code{""}
+to show the reference area with no legend entry.}
+
+\item{linewidth_overall}{numeric. Line width for the overall (pooled)
+population density curve. Default is \code{1}.}
+
+\item{linewidth_cluster}{numeric. Line width for per-group density curves.
+Default is \code{0.5}.}
 
 \item{label}{logical. Whether to add on-plot labels at the highest-density
 peak of each group using \code{ggrepel::geom_text_repel}. When \code{density} is

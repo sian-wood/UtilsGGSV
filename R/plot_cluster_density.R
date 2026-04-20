@@ -137,6 +137,23 @@
 #' @param alpha numeric. Transparency applied to density curves (both overall
 #'   and per-group lines). Must be between 0 (fully transparent) and 1 (fully
 #'   opaque). Default is `0.75`.
+#' @param pop_ref numeric vector, named list of numeric vectors, or `NULL`.
+#'   An additional reference population rendered as a filled light-grey density
+#'   area behind all other layers. A plain numeric vector is used for every
+#'   variable. A named list (names = variable names, values = numeric vectors)
+#'   applies a per-variable reference. `NULL` (default) adds no reference
+#'   layer. The density bandwidth, NA handling, and (when `scale =
+#'   "max_overall"`) y-axis scaling all follow the same settings as the main
+#'   data.
+#' @param pop_ref_label character or `NULL`. Label for the `pop_ref` fill
+#'   legend entry. When `NULL` (default) and `pop_ref` is supplied, the label
+#'   is derived automatically from the name of the object passed to `pop_ref`;
+#'   if no simple name can be determined, `"Reference"` is used. Set to `""`
+#'   to show the reference area with no legend entry.
+#' @param linewidth_overall numeric. Line width for the overall (pooled)
+#'   population density curve. Default is `1`.
+#' @param linewidth_cluster numeric. Line width for per-group density curves.
+#'   Default is `0.5`.
 #' @param label logical. Whether to add on-plot labels at the highest-density
 #'   peak of each group using `ggrepel::geom_text_repel`. When `density` is
 #'   `"overall"`, labels are placed at the overall-density value at each
@@ -207,6 +224,10 @@ plot_group_density <- function(.data,
                                  bandwidth = "hpi_1",
                                  na_rm = TRUE,
                                  alpha = 0.75,
+                                 pop_ref = NULL,
+                                 pop_ref_label = NULL,
+                                 linewidth_overall = 1,
+                                 linewidth_cluster = 0.5,
                                  label = FALSE,
                                  show_legend = NULL,
                                  legend = NULL,
@@ -225,6 +246,17 @@ plot_group_density <- function(.data,
                                  grid = cowplot::background_grid(
                                    major = "xy"
                                  )) {
+  # Capture the expression passed to pop_ref before any evaluation modifies it,
+  # so that we can auto-derive a legend label from the variable name.
+  if (is.null(pop_ref_label) && !missing(pop_ref) && !is.null(pop_ref)) {
+    pop_ref_nm <- deparse(substitute(pop_ref))
+    pop_ref_label <- if (grepl("^[A-Za-z._][A-Za-z0-9._]*$", pop_ref_nm)) {
+      pop_ref_nm
+    } else {
+      "Reference"
+    }
+  }
+
   cluster <- group
   density <- match.arg(density, c("both", "overall", "cluster"))
   scale <- match.arg(scale, c("max_overall", "max_cluster", "free"))
@@ -248,6 +280,48 @@ plot_group_density <- function(.data,
   if (!is.numeric(alpha) || length(alpha) != 1L || is.na(alpha) ||
         alpha < 0 || alpha > 1) {
     stop("`alpha` must be a single number between 0 and 1.", call. = FALSE)
+  }
+  if (!is.null(pop_ref)) {
+    if (is.list(pop_ref)) {
+      if (!all(vapply(pop_ref, is.numeric, logical(1L)))) {
+        stop("Each element of `pop_ref` must be a numeric vector.", call. = FALSE)
+      }
+    } else if (!is.numeric(pop_ref)) {
+      stop(
+        "`pop_ref` must be a numeric vector or a named list of numeric vectors.",
+        call. = FALSE
+      )
+    }
+    # Strip NAs from pop_ref following the same na_rm logic as .data.
+    if (is.list(pop_ref)) {
+      pop_ref <- lapply(pop_ref, function(vals) {
+        n_na <- sum(is.na(vals))
+        if (n_na > 0L && na_rm) {
+          message("Removing ", n_na, " NA value(s) from `pop_ref`.")
+          vals[!is.na(vals)]
+        } else {
+          vals
+        }
+      })
+    } else {
+      n_na <- sum(is.na(pop_ref))
+      if (n_na > 0L && na_rm) {
+        message("Removing ", n_na, " NA value(s) from `pop_ref`.")
+        pop_ref <- pop_ref[!is.na(pop_ref)]
+      }
+    }
+  }
+  if (!is.null(pop_ref_label) &&
+      (!is.character(pop_ref_label) || length(pop_ref_label) != 1L)) {
+    stop("`pop_ref_label` must be a single character string or NULL.", call. = FALSE)
+  }
+  if (!is.numeric(linewidth_overall) || length(linewidth_overall) != 1L ||
+      is.na(linewidth_overall) || linewidth_overall <= 0) {
+    stop("`linewidth_overall` must be a single positive number.", call. = FALSE)
+  }
+  if (!is.numeric(linewidth_cluster) || length(linewidth_cluster) != 1L ||
+      is.na(linewidth_cluster) || linewidth_cluster <= 0) {
+    stop("`linewidth_cluster` must be a single positive number.", call. = FALSE)
   }
   if (!is.logical(label) || length(label) != 1L || is.na(label)) {
     stop("`label` must be TRUE or FALSE.", call. = FALSE)
@@ -436,6 +510,16 @@ plot_group_density <- function(.data,
     }
   }
 
+  # Helper: compute density tibble for the additional reference population,
+  # using the same bandwidth strategy as the per-cluster densities.
+  .pop_ref_dens_tbl <- function(v) {
+    vals <- if (is.list(pop_ref)) pop_ref[[v]] else pop_ref
+    if (is.null(vals) || length(vals) < 2) return(NULL)
+    bw <- .resolve_bw(vals)
+    d <- stats::density(vals, bw = bw)
+    tibble::tibble(x = d$x, y = d$y)
+  }
+
   # Helper: add a rug layer to a faceted plot.
   .add_rug_facet <- function(p) {
     mode <- .rug_mode()
@@ -468,12 +552,28 @@ plot_group_density <- function(.data,
     }
   }
 
+  # TRUE when pop_ref is provided and a non-empty label was derived/supplied.
+  use_pop_ref_label <- !is.null(pop_ref_label) && nzchar(pop_ref_label)
+
   if (!use_facet) {
     plot_list <- stats::setNames(
       lapply(vars, function(v) {
         all_vals  <- data[[v]]
         all_vals  <- .strip_na(all_vals, v)
         dens_vals <- .filter_vals(all_vals, v)
+
+        pop_ref_d <- if (!is.null(pop_ref)) .pop_ref_dens_tbl(v) else NULL
+        p <- ggplot2::ggplot()
+        if (!is.null(pop_ref_d)) {
+          pop_ref_d$pop_ref_group <- if (use_pop_ref_label) pop_ref_label else ""
+          p <- p + ggplot2::geom_area(
+            data = pop_ref_d,
+            ggplot2::aes(x = .data$x, y = .data$y, fill = .data$pop_ref_group),
+            colour = NA,
+            alpha = alpha,
+            inherit.aes = FALSE
+          )
+        }
 
         if (density == "overall") {
           med_tbl <- purrr::map_df(cluster_vec, function(cl) {
@@ -486,11 +586,12 @@ plot_group_density <- function(.data,
 
           if (!is.null(density_overall_weight)) {
             overall_d <- .even_weight_dens_tbl(dens_vals, all_vals, v)
-            p <- ggplot2::ggplot() +
+            p <- p +
               ggplot2::geom_line(
                 data = overall_d,
                 ggplot2::aes(x = .data$x, y = .data$y),
-                alpha = alpha
+                alpha = alpha,
+                linewidth = linewidth_overall
               ) +
               ggplot2::geom_vline(
                 data = med_tbl,
@@ -500,11 +601,13 @@ plot_group_density <- function(.data,
               ) +
               ggplot2::labs(x = v, y = "Density", colour = "Group")
           } else {
-            dens_tbl <- tibble::tibble(value = dens_vals)
-            p <- ggplot2::ggplot(
-              dens_tbl, ggplot2::aes(x = .data$value)
-            ) +
-              ggplot2::geom_density(alpha = alpha) +
+            p <- p +
+              ggplot2::geom_density(
+                data = tibble::tibble(value = dens_vals),
+                ggplot2::aes(x = .data$value),
+                alpha = alpha,
+                linewidth = linewidth_overall
+              ) +
               ggplot2::geom_vline(
                 data = med_tbl,
                 ggplot2::aes(
@@ -524,30 +627,36 @@ plot_group_density <- function(.data,
           } else {
             NULL
           }
+          if (!is.null(pop_ref_d) && !is.null(max_y_ref)) {
+            max_pr_y <- max(pop_ref_d$y)
+            if (max_pr_y > 0) pop_ref_d$y <- pop_ref_d$y * max_y_ref / max_pr_y
+          }
           cl_dens <- .cluster_dens_tbl(all_vals, v, max_y_ref)
 
           if (density == "cluster") {
-            p <- ggplot2::ggplot(
-              cl_dens,
-              ggplot2::aes(
-                x = .data$x, y = .data$y, colour = .data$cluster
-              )
-            ) +
-              ggplot2::geom_line(alpha = alpha) +
+            p <- p +
+              ggplot2::geom_line(
+                data = cl_dens,
+                ggplot2::aes(x = .data$x, y = .data$y, colour = .data$cluster),
+                alpha = alpha,
+                linewidth = linewidth_cluster
+              ) +
               ggplot2::labs(x = v, y = "Density", colour = "Group")
           } else {
-            p <- ggplot2::ggplot() +
-              ggplot2::geom_line(
-                data = overall_d,
-                ggplot2::aes(x = .data$x, y = .data$y),
-                alpha = alpha
-              ) +
+            p <- p +
               ggplot2::geom_line(
                 data = cl_dens,
                 ggplot2::aes(
                   x = .data$x, y = .data$y, colour = .data$cluster
                 ),
-                alpha = alpha
+                alpha = alpha,
+                linewidth = linewidth_cluster
+              ) +
+              ggplot2::geom_line(
+                data = overall_d,
+                ggplot2::aes(x = .data$x, y = .data$y),
+                alpha = alpha,
+                linewidth = linewidth_overall
               ) +
               ggplot2::labs(x = v, y = "Density", colour = "Group")
           }
@@ -601,6 +710,13 @@ plot_group_density <- function(.data,
         p <- p + ggplot2::scale_colour_manual(
           values = .discrete_cluster_colours(cluster_vec, col_clusters, palette_group)
         )
+        if (!is.null(pop_ref_d)) {
+          p <- p + ggplot2::scale_fill_manual(
+            values = stats::setNames("grey85", if (use_pop_ref_label) pop_ref_label else ""),
+            name = NULL,
+            guide = if (use_pop_ref_label) ggplot2::guide_legend() else "none"
+          )
+        }
         if (!is.null(thm)) p <- p + thm
         if (!is.null(grid)) p <- p + grid
         if (!show_legend) p <- p + ggplot2::theme(legend.position = "none")
@@ -610,6 +726,28 @@ plot_group_density <- function(.data,
       vars
     )
     return(plot_list)
+  }
+
+  pop_ref_facet_tbl <- if (!is.null(pop_ref)) {
+    purrr::map_df(vars, function(v) {
+      d <- .pop_ref_dens_tbl(v)
+      if (is.null(d)) return(tibble::tibble())
+      d$variable <- v
+      d$pop_ref_group <- if (use_pop_ref_label) pop_ref_label else ""
+      d
+    })
+  } else {
+    NULL
+  }
+  p <- ggplot2::ggplot()
+  if (!is.null(pop_ref_facet_tbl) && nrow(pop_ref_facet_tbl) > 0) {
+    p <- p + ggplot2::geom_area(
+      data = pop_ref_facet_tbl,
+      ggplot2::aes(x = .data$x, y = .data$y, fill = .data$pop_ref_group),
+      colour = NA,
+      alpha = alpha,
+      inherit.aes = FALSE
+    )
   }
 
   if (density == "overall") {
@@ -639,11 +777,12 @@ plot_group_density <- function(.data,
         d$variable <- v
         d
       })
-      p <- ggplot2::ggplot() +
+      p <- p +
         ggplot2::geom_line(
           data = overall_dens_tbl,
           ggplot2::aes(x = .data$x, y = .data$y),
-          alpha = alpha
+          alpha = alpha,
+          linewidth = linewidth_overall
         ) +
         ggplot2::geom_vline(
           data = median_tbl,
@@ -657,8 +796,13 @@ plot_group_density <- function(.data,
         ) +
         ggplot2::labs(x = "Value", y = "Density", colour = "Group")
     } else {
-      p <- ggplot2::ggplot(long_tbl, ggplot2::aes(x = .data$value)) +
-        ggplot2::geom_density(alpha = alpha) +
+      p <- p +
+        ggplot2::geom_density(
+          data = long_tbl,
+          ggplot2::aes(x = .data$value),
+          alpha = alpha,
+          linewidth = linewidth_overall
+        ) +
         ggplot2::geom_vline(
           data = median_tbl,
           ggplot2::aes(xintercept = .data$median, colour = .data$cluster)
@@ -704,14 +848,28 @@ plot_group_density <- function(.data,
       d
     })
 
+    # Rescale pop_ref densities to the overall peak, per variable.
+    if (!is.null(pop_ref_facet_tbl) && nrow(pop_ref_facet_tbl) > 0 &&
+        scale == "max_overall") {
+      pop_ref_facet_tbl <- purrr::map_df(vars, function(v) {
+        sub <- pop_ref_facet_tbl[pop_ref_facet_tbl$variable == v, , drop = FALSE]
+        if (nrow(sub) == 0L) return(sub)
+        od_sub <- overall_dens_tbl[overall_dens_tbl$variable == v, , drop = FALSE]
+        if (nrow(od_sub) == 0L) return(sub)
+        max_pr <- max(sub$y)
+        if (max_pr > 0) sub$y <- sub$y * max(od_sub$y) / max_pr
+        sub
+      })
+    }
+
     if (density == "cluster") {
-      p <- ggplot2::ggplot(
-        cluster_dens_tbl,
-        ggplot2::aes(
-          x = .data$x, y = .data$y, colour = .data$cluster
-        )
-      ) +
-        ggplot2::geom_line(alpha = alpha) +
+      p <- p +
+        ggplot2::geom_line(
+          data = cluster_dens_tbl,
+          ggplot2::aes(x = .data$x, y = .data$y, colour = .data$cluster),
+          alpha = alpha,
+          linewidth = linewidth_cluster
+        ) +
         ggplot2::facet_wrap(
           ~ .data$variable,
           scales = scales,
@@ -720,18 +878,20 @@ plot_group_density <- function(.data,
         ) +
         ggplot2::labs(x = "Value", y = "Density", colour = "Group")
     } else {
-      p <- ggplot2::ggplot() +
-        ggplot2::geom_line(
-          data = overall_dens_tbl,
-          ggplot2::aes(x = .data$x, y = .data$y),
-          alpha = alpha
-        ) +
+      p <- p +
         ggplot2::geom_line(
           data = cluster_dens_tbl,
           ggplot2::aes(
             x = .data$x, y = .data$y, colour = .data$cluster
           ),
-          alpha = alpha
+          alpha = alpha,
+          linewidth = linewidth_cluster
+        ) +
+        ggplot2::geom_line(
+          data = overall_dens_tbl,
+          ggplot2::aes(x = .data$x, y = .data$y),
+          alpha = alpha,
+          linewidth = linewidth_overall
         ) +
         ggplot2::facet_wrap(
           ~ .data$variable,
@@ -799,6 +959,13 @@ plot_group_density <- function(.data,
   p <- p + ggplot2::scale_colour_manual(
     values = .discrete_cluster_colours(cluster_vec, col_clusters, palette_group)
   )
+  if (!is.null(pop_ref_facet_tbl) && nrow(pop_ref_facet_tbl) > 0) {
+    p <- p + ggplot2::scale_fill_manual(
+      values = stats::setNames("grey85", if (use_pop_ref_label) pop_ref_label else ""),
+      name = NULL,
+      guide = if (use_pop_ref_label) ggplot2::guide_legend() else "none"
+    )
+  }
   if (!is.null(thm)) p <- p + thm
   if (!is.null(grid)) p <- p + grid
   if (!show_legend) p <- p + ggplot2::theme(legend.position = "none")
