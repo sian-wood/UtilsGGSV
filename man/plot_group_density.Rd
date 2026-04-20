@@ -27,6 +27,7 @@ plot_group_density(
   pop_ref_label = NULL,
   linewidth_overall = 1,
   linewidth_cluster = 0.5,
+  pop_ref_colour = "grey70",
   label = FALSE,
   show_legend = NULL,
   legend = NULL,
@@ -145,6 +146,9 @@ population density curve. Default is \code{1}.}
 
 \item{linewidth_cluster}{numeric. Line width for per-group density curves.
 Default is \code{0.5}.}
+
+\item{pop_ref_colour}{character. Fill and outline colour for the \code{pop_ref}
+density area. Default is \code{"grey70"}.}
 
 \item{label}{logical. Whether to add on-plot labels at the highest-density
 peak of each group using \code{ggrepel::geom_text_repel}. When \code{density} is

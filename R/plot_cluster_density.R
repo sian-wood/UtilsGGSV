@@ -154,6 +154,8 @@
 #'   population density curve. Default is `1`.
 #' @param linewidth_cluster numeric. Line width for per-group density curves.
 #'   Default is `0.5`.
+#' @param pop_ref_colour character. Fill and outline colour for the `pop_ref`
+#'   density area. Default is `"grey70"`.
 #' @param label logical. Whether to add on-plot labels at the highest-density
 #'   peak of each group using `ggrepel::geom_text_repel`. When `density` is
 #'   `"overall"`, labels are placed at the overall-density value at each
@@ -228,6 +230,7 @@ plot_group_density <- function(.data,
                                  pop_ref_label = NULL,
                                  linewidth_overall = 1,
                                  linewidth_cluster = 0.5,
+                                 pop_ref_colour = "grey70",
                                  label = FALSE,
                                  show_legend = NULL,
                                  legend = NULL,
@@ -322,6 +325,10 @@ plot_group_density <- function(.data,
   if (!is.numeric(linewidth_cluster) || length(linewidth_cluster) != 1L ||
       is.na(linewidth_cluster) || linewidth_cluster <= 0) {
     stop("`linewidth_cluster` must be a single positive number.", call. = FALSE)
+  }
+  if (!is.character(pop_ref_colour) || length(pop_ref_colour) != 1L ||
+      is.na(pop_ref_colour)) {
+    stop("`pop_ref_colour` must be a single character string.", call. = FALSE)
   }
   if (!is.logical(label) || length(label) != 1L || is.na(label)) {
     stop("`label` must be TRUE or FALSE.", call. = FALSE)
@@ -712,7 +719,7 @@ plot_group_density <- function(.data,
         )
         if (!is.null(pop_ref_d)) {
           p <- p + ggplot2::scale_fill_manual(
-            values = stats::setNames("grey85", if (use_pop_ref_label) pop_ref_label else ""),
+            values = stats::setNames(pop_ref_colour, if (use_pop_ref_label) pop_ref_label else ""),
             name = NULL,
             guide = if (use_pop_ref_label) ggplot2::guide_legend() else "none"
           )
@@ -961,7 +968,7 @@ plot_group_density <- function(.data,
   )
   if (!is.null(pop_ref_facet_tbl) && nrow(pop_ref_facet_tbl) > 0) {
     p <- p + ggplot2::scale_fill_manual(
-      values = stats::setNames("grey85", if (use_pop_ref_label) pop_ref_label else ""),
+      values = stats::setNames(pop_ref_colour, if (use_pop_ref_label) pop_ref_label else ""),
       name = NULL,
       guide = if (use_pop_ref_label) ggplot2::guide_legend() else "none"
     )
