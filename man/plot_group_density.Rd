@@ -28,6 +28,8 @@ plot_group_density(
   linewidth_overall = 1,
   linewidth_cluster = 0.5,
   pop_ref_colour = "grey70",
+  xlim = NULL,
+  ylim = NULL,
   label = FALSE,
   show_legend = NULL,
   legend = NULL,
@@ -149,6 +151,16 @@ Default is \code{0.5}.}
 
 \item{pop_ref_colour}{character. Fill and outline colour for the \code{pop_ref}
 density area. Default is \code{"grey70"}.}
+
+\item{xlim}{numeric vector of length 2 or \code{NULL}. Lower and upper limits for
+the x-axis (\code{c(lower, upper)}). Either element may be \code{NA} to leave that
+bound unrestricted. Applied via \code{ggplot2::coord_cartesian} (data outside
+the range are clipped, not removed). Default is \code{NULL} (no restriction).}
+
+\item{ylim}{numeric vector of length 2 or \code{NULL}. Lower and upper limits for
+the y-axis (\code{c(lower, upper)}). Either element may be \code{NA} to leave that
+bound unrestricted. Applied via \code{ggplot2::coord_cartesian}. Default is
+\code{NULL} (no restriction).}
 
 \item{label}{logical. Whether to add on-plot labels at the highest-density
 peak of each group using \code{ggrepel::geom_text_repel}. When \code{density} is

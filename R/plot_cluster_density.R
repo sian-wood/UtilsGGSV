@@ -156,6 +156,14 @@
 #'   Default is `0.5`.
 #' @param pop_ref_colour character. Fill and outline colour for the `pop_ref`
 #'   density area. Default is `"grey70"`.
+#' @param xlim numeric vector of length 2 or `NULL`. Lower and upper limits for
+#'   the x-axis (`c(lower, upper)`). Either element may be `NA` to leave that
+#'   bound unrestricted. Applied via `ggplot2::coord_cartesian` (data outside
+#'   the range are clipped, not removed). Default is `NULL` (no restriction).
+#' @param ylim numeric vector of length 2 or `NULL`. Lower and upper limits for
+#'   the y-axis (`c(lower, upper)`). Either element may be `NA` to leave that
+#'   bound unrestricted. Applied via `ggplot2::coord_cartesian`. Default is
+#'   `NULL` (no restriction).
 #' @param label logical. Whether to add on-plot labels at the highest-density
 #'   peak of each group using `ggrepel::geom_text_repel`. When `density` is
 #'   `"overall"`, labels are placed at the overall-density value at each
@@ -231,6 +239,8 @@ plot_group_density <- function(.data,
                                  linewidth_overall = 1,
                                  linewidth_cluster = 0.5,
                                  pop_ref_colour = "grey70",
+                                 xlim = NULL,
+                                 ylim = NULL,
                                  label = FALSE,
                                  show_legend = NULL,
                                  legend = NULL,
@@ -570,6 +580,26 @@ plot_group_density <- function(.data,
         dens_vals <- .filter_vals(all_vals, v)
 
         pop_ref_d <- if (!is.null(pop_ref)) .pop_ref_dens_tbl(v) else NULL
+
+        # For cluster/both modes compute overall_d and rescale pop_ref before
+        # building the plot, so the geom_area receives correctly-scaled data.
+        if (density != "overall") {
+          overall_d <- if (!is.null(density_overall_weight)) {
+            .even_weight_dens_tbl(dens_vals, all_vals, v)
+          } else {
+            .dens_tbl(dens_vals)
+          }
+          max_y_ref <- if (scale == "max_overall" && !is.null(overall_d)) {
+            max(overall_d$y)
+          } else {
+            NULL
+          }
+          if (!is.null(pop_ref_d) && !is.null(max_y_ref)) {
+            max_pr_y <- max(pop_ref_d$y)
+            if (max_pr_y > 0) pop_ref_d$y <- pop_ref_d$y * max_y_ref / max_pr_y
+          }
+        }
+
         p <- ggplot2::ggplot()
         if (!is.null(pop_ref_d)) {
           pop_ref_d$pop_ref_group <- if (use_pop_ref_label) pop_ref_label else ""
@@ -624,20 +654,6 @@ plot_group_density <- function(.data,
               ggplot2::labs(x = v, y = "Density", colour = "Group")
           }
         } else {
-          if (!is.null(density_overall_weight)) {
-            overall_d <- .even_weight_dens_tbl(dens_vals, all_vals, v)
-          } else {
-            overall_d <- .dens_tbl(dens_vals)
-          }
-          max_y_ref <- if (scale == "max_overall" && !is.null(overall_d)) {
-            max(overall_d$y)
-          } else {
-            NULL
-          }
-          if (!is.null(pop_ref_d) && !is.null(max_y_ref)) {
-            max_pr_y <- max(pop_ref_d$y)
-            if (max_pr_y > 0) pop_ref_d$y <- pop_ref_d$y * max_y_ref / max_pr_y
-          }
           cl_dens <- .cluster_dens_tbl(all_vals, v, max_y_ref)
 
           if (density == "cluster") {
@@ -713,6 +729,9 @@ plot_group_density <- function(.data,
           ec <- if (is.list(expand_coord)) expand_coord[[v]] else expand_coord
           if (!is.null(ec)) p <- p + ggplot2::expand_limits(x = ec)
         }
+        if (!is.null(xlim) || !is.null(ylim)) {
+          p <- p + ggplot2::coord_cartesian(xlim = xlim, ylim = ylim)
+        }
 
         p <- p + ggplot2::scale_colour_manual(
           values = .discrete_cluster_colours(cluster_vec, col_clusters, palette_group)
@@ -746,18 +765,17 @@ plot_group_density <- function(.data,
   } else {
     NULL
   }
-  p <- ggplot2::ggplot()
-  if (!is.null(pop_ref_facet_tbl) && nrow(pop_ref_facet_tbl) > 0) {
-    p <- p + ggplot2::geom_area(
-      data = pop_ref_facet_tbl,
-      ggplot2::aes(x = .data$x, y = .data$y, fill = .data$pop_ref_group),
-      colour = NA,
-      alpha = alpha,
-      inherit.aes = FALSE
-    )
-  }
-
   if (density == "overall") {
+    p <- ggplot2::ggplot()
+    if (!is.null(pop_ref_facet_tbl) && nrow(pop_ref_facet_tbl) > 0) {
+      p <- p + ggplot2::geom_area(
+        data = pop_ref_facet_tbl,
+        ggplot2::aes(x = .data$x, y = .data$y, fill = .data$pop_ref_group),
+        colour = NA,
+        alpha = alpha,
+        inherit.aes = FALSE
+      )
+    }
     long_tbl <- purrr::map_df(vars, function(v) {
       all_vals <- .strip_na(data[[v]], v)
       tibble::tibble(variable = v, value = .filter_vals(all_vals, v))
@@ -869,6 +887,17 @@ plot_group_density <- function(.data,
       })
     }
 
+    p <- ggplot2::ggplot()
+    if (!is.null(pop_ref_facet_tbl) && nrow(pop_ref_facet_tbl) > 0) {
+      p <- p + ggplot2::geom_area(
+        data = pop_ref_facet_tbl,
+        ggplot2::aes(x = .data$x, y = .data$y, fill = .data$pop_ref_group),
+        colour = NA,
+        alpha = alpha,
+        inherit.aes = FALSE
+      )
+    }
+
     if (density == "cluster") {
       p <- p +
         ggplot2::geom_line(
@@ -961,6 +990,9 @@ plot_group_density <- function(.data,
 
   if (!is.null(expand_coord) && is.numeric(expand_coord)) {
     p <- p + ggplot2::expand_limits(x = expand_coord)
+  }
+  if (!is.null(xlim) || !is.null(ylim)) {
+    p <- p + ggplot2::coord_cartesian(xlim = xlim, ylim = ylim)
   }
 
   p <- p + ggplot2::scale_colour_manual(
