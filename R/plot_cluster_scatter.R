@@ -71,7 +71,8 @@
 #'   with missing axis values are silently dropped by ggplot2.
 #' @param point_size numeric. Size of observation points. Default is `2`.
 #' @param point_alpha numeric. Alpha transparency for observation points and legend guide. Default is `0.65`.
-#' @param centroid_size numeric. Size of centroid points. Default is `3`.
+#' @param centroid_size numeric or `NULL`. Size of centroid points. Default is `3`.
+#'   Set to `NULL` to suppress both centroid points and labels.
 #' @param label_size numeric. Font size for centroid labels. Default is `4`.
 #' @param label_offset numeric. Label repulsion padding for centroid labels in cm. Default is `0.3`.
 #' @param ggrepel logical. Use `ggrepel::geom_text_repel` for centroid labels. Default is `TRUE`.
@@ -181,9 +182,10 @@ plot_group_scatter <- function(.data,
       point_alpha < 0 || point_alpha > 1) {
     stop("`point_alpha` must be a single number in [0, 1].", call. = FALSE)
   }
-  if (!is.numeric(centroid_size) || length(centroid_size) != 1L ||
-      centroid_size <= 0) {
-    stop("`centroid_size` must be a single positive number.", call. = FALSE)
+  if (!is.null(centroid_size) &&
+      (!is.numeric(centroid_size) || length(centroid_size) != 1L ||
+       centroid_size <= 0)) {
+    stop("`centroid_size` must be a single positive number or NULL.", call. = FALSE)
   }
   if (!is.list(dim_red_args)) {
     stop("`dim_red_args` must be a list.", call. = FALSE)
@@ -350,7 +352,9 @@ plot_group_scatter <- function(.data,
     }
   }
 
-  centroid_tbl <- aggregate(cbind(x = x, y = y) ~ cluster, data = plot_data, FUN = stats::median)
+  if (!is.null(centroid_size)) {
+    centroid_tbl <- aggregate(cbind(x = x, y = y) ~ cluster, data = plot_data, FUN = stats::median)
+  }
 
   p <- ggplot2::ggplot(
     plot_data,
@@ -390,42 +394,46 @@ plot_group_scatter <- function(.data,
     )
   }
 
-  if (!is.null(label_offset)) {
-    if (ggrepel) {
-      p <- p + ggrepel::geom_text_repel(
-        data = centroid_tbl,
-        ggplot2::aes(x = x, y = y, label = cluster),
-        inherit.aes = FALSE,
-        size = label_size,
-        fontface = "bold",
-        min.segment.length = 0,
-        segment.colour = "black",
-        point.padding = ggplot2::unit(label_offset, "cm")
-      )
-    } else {
-      p <- p + ggplot2::geom_text(
-        data = centroid_tbl,
-        ggplot2::aes(x = x, y = y, label = cluster),
-        inherit.aes = FALSE,
-        colour = "black",
-        size = label_size,
-        fontface = "bold",
-        vjust = -0.5,
-        hjust = 0
-      )
+  if (!is.null(centroid_size)) {
+    if (!is.null(label_offset)) {
+      if (ggrepel) {
+        p <- p + ggrepel::geom_text_repel(
+          data = centroid_tbl,
+          ggplot2::aes(x = x, y = y, label = cluster),
+          inherit.aes = FALSE,
+          size = label_size,
+          fontface = "bold",
+          min.segment.length = 0,
+          segment.colour = "black",
+          point.padding = ggplot2::unit(label_offset, "cm")
+        )
+      } else {
+        p <- p + ggplot2::geom_text(
+          data = centroid_tbl,
+          ggplot2::aes(x = x, y = y, label = cluster),
+          inherit.aes = FALSE,
+          colour = "black",
+          size = label_size,
+          fontface = "bold",
+          vjust = -0.5,
+          hjust = 0
+        )
+      }
     }
+
+    p <- p +
+      ggplot2::geom_point(
+        data = centroid_tbl,
+        ggplot2::aes(x = x, y = y, fill = cluster),
+        inherit.aes = FALSE,
+        size = centroid_size,
+        alpha = 0.9,
+        colour = "black",
+        shape = 21
+      )
   }
 
   p <- p +
-    ggplot2::geom_point(
-      data = centroid_tbl,
-      ggplot2::aes(x = x, y = y, fill = cluster),
-      inherit.aes = FALSE,
-      size = centroid_size,
-      alpha = 0.9,
-      colour = "black",
-      shape = 21
-    ) +
     ggplot2::labs(
       x = if (is.null(x_lab)) x_var else x_lab,
       y = if (is.null(y_lab)) y_var else y_lab,
