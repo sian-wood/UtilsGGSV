@@ -82,6 +82,11 @@
 #' @param y_lab character or `NULL`. Label for y axis; default uses reduction variable names.
 #' @param show_legend logical. Whether to show the legend. Default is `TRUE`.
 #'   Set to `FALSE` to hide the legend, as centroid labels may suffice.
+#' @param point_order character vector or `NULL`. Cluster names listed in
+#'   bottom-to-top draw order. Clusters listed last are drawn on top of all
+#'   others. Clusters absent from `point_order` are drawn first (beneath any
+#'   listed clusters) in their original row order. When `NULL` (default) no
+#'   reordering is applied.
 #' @param dim_red_args named list. Additional arguments passed to the
 #'   dimensionality reduction function, overriding any defaults set by
 #'   `plot_cluster_scatter`. For `dim_red = "pca"` these are passed to
@@ -134,6 +139,7 @@ plot_group_scatter <- function(.data,
                                  x_lab = NULL,
                                  y_lab = NULL,
                                  show_legend = TRUE,
+                                 point_order = NULL,
                                  thm = cowplot::theme_cowplot(
                                    font_size = font_size
                                  ) +
@@ -323,6 +329,22 @@ plot_group_scatter <- function(.data,
 
   plot_data$cluster <- as.factor(plot_data$cluster)
 
+  if (!is.null(point_order)) {
+    if (!is.character(point_order)) {
+      stop("`point_order` must be a character vector or NULL.", call. = FALSE)
+    }
+    unknown <- setdiff(point_order, levels(plot_data$cluster))
+    if (length(unknown) > 0L) {
+      stop(
+        "`point_order` contains names not found in `", cluster, "`: ",
+        paste(unknown, collapse = ", "), ".",
+        call. = FALSE
+      )
+    }
+    sort_key <- match(as.character(plot_data$cluster), point_order, nomatch = 0L)
+    plot_data <- plot_data[order(sort_key), ]
+  }
+
   if (point_col_var == cluster) {
     plot_data$point_col <- as.factor(plot_data$point_col)
     point_col_discrete <- TRUE
@@ -373,15 +395,6 @@ plot_group_scatter <- function(.data,
     p <- p + ggplot2::scale_colour_manual(
       values = .discrete_cluster_colours(levels(plot_data$point_col), point_col, palette_group)
     )
-    if (point_col_var == cluster) {
-      p <- p + ggplot2::scale_fill_manual(
-        values = .discrete_cluster_colours(levels(plot_data$cluster), point_col, palette_group)
-      )
-    } else {
-      p <- p + ggplot2::scale_fill_manual(
-        values = .discrete_cluster_colours(levels(plot_data$cluster), NULL, palette_group)
-      )
-    }
   } else {
     gradientn_args <- .build_gradientn_args(col, col_positions, white_range)
     p <- p + ggplot2::scale_colour_gradientn(
@@ -389,12 +402,16 @@ plot_group_scatter <- function(.data,
       values  = gradientn_args$values,
       name    = point_col_var
     )
-    p <- p + ggplot2::scale_fill_manual(
-      values = .discrete_cluster_colours(levels(plot_data$cluster), NULL, palette_group)
-    )
   }
 
   if (!is.null(centroid_size)) {
+    centroid_fill_cols <- .discrete_cluster_colours(
+      levels(plot_data$cluster),
+      if (point_col_var == cluster) point_col else NULL,
+      palette_group
+    )
+    centroid_tbl$centroid_fill <- centroid_fill_cols[as.character(centroid_tbl$cluster)]
+
     if (!is.null(label_offset)) {
       if (ggrepel) {
         p <- p + ggrepel::geom_text_repel(
@@ -424,7 +441,7 @@ plot_group_scatter <- function(.data,
     p <- p +
       ggplot2::geom_point(
         data = centroid_tbl,
-        ggplot2::aes(x = x, y = y, fill = cluster),
+        ggplot2::aes(x = x, y = y, fill = I(centroid_fill)),
         inherit.aes = FALSE,
         size = centroid_size,
         alpha = 0.9,
@@ -437,8 +454,7 @@ plot_group_scatter <- function(.data,
     ggplot2::labs(
       x = if (is.null(x_lab)) x_var else x_lab,
       y = if (is.null(y_lab)) y_var else y_lab,
-      colour = if (point_col_var == cluster) "Group" else point_col_var,
-      fill = "Group"
+      colour = if (point_col_var == cluster) "Group" else point_col_var
     ) +
     ggplot2::guides(colour = ggplot2::guide_legend(override.aes = list(alpha = point_alpha)))
 

@@ -42,11 +42,11 @@
   }
 
   cluster_vals <- .data[[cluster]][!is.na(.data[[cluster]])]
-  if (length(unique(cluster_vals)) < 2L) {
+  if (length(unique(cluster_vals)) < 1L) {
     stop(
       paste0(
         "The `cluster` column (\"", cluster, "\") must have at least ",
-        "2 unique non-NA values."
+        "1 unique non-NA value."
       ),
       call. = FALSE
     )
